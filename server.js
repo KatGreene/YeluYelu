@@ -34,6 +34,13 @@ app.use('/api/images', express.static(path.join(__dirname, 'public/images')));
 // 解析JSON请求体
 app.use(express.json());
 
+// 在所有 API 路由中添加缓存控制头
+app.use('/api', (req, res, next) => {
+    // 设置缓存控制头 - 客户端可以缓存1小时
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    next();
+});
+
 // 配置Multer存储引擎
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {

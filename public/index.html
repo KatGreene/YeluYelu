@@ -160,6 +160,33 @@
      class="fixed bottom-4 right-4 bg-primary text-white px-4 py-2 border-2 border-black p-4 transform transition-all duration-500 translate-y-20 opacity-0 z-50"></div>
 
 <script>
+    // 注册 Service Worker
+    window.isServiceWorkerEnabled = false; // 全局标志，默认禁用
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('SW registered:', registration);
+                    window.isServiceWorkerEnabled = true; // 注册成功，启用缓存
+                })
+                .catch(error => {
+                    console.log('SW registration failed:', error);
+                    // 注册失败时清除可能存在的旧缓存
+                    if ('caches' in window) {
+                        caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    return caches.delete(cacheName);
+                                })
+                            );
+                        });
+                    }
+                    window.isServiceWorkerEnabled = false; // 禁用缓存
+                });
+        });
+    }
+
     // API配置
     // 根据当前域名动态设置 API 基础 URL
     const API_BASE_URL = (() => {
@@ -170,6 +197,8 @@
         // 生产环境使用当前域名
         return `${window.location.protocol}//${window.location.host}/api`;
     })();
+    const CACHE_NAME = 'bird-guide-cache-v3';
+    const CACHE_EXPIRATION_DAYS = 7; // 缓存过期天数
     let currentBirdId = null; // 当前操作的鸟类ID
     let currentPage = 1;
     let isLoading = false;
@@ -201,8 +230,57 @@
     // 初始化页面
     function init() {
         setupEventListeners();
-        fetchBirds();
-        fetchBirdCount();
+        initCache().then(() => {
+            fetchBirds();
+            fetchBirdCount();
+        });
+    }
+
+    // 在 init() 函数中添加缓存初始化
+    async function initCache() {
+        if (!window.isServiceWorkerEnabled) return; // 如果SW未启用，跳过缓存初始化
+
+        if ('caches' in window) {
+            try {
+                const cache = await caches.open(CACHE_NAME);
+                await cleanupExpiredCache();
+            } catch (error) {
+                console.error('Cache initialization failed:', error);
+            }
+        }
+    }
+
+    // 清理过期缓存
+    async function cleanupExpiredCache() {
+        if (!window.isServiceWorkerEnabled) return; // 如果SW未启用，跳过缓存清理
+
+        try {
+            const cacheNames = await caches.keys();
+            const currentTime = Date.now();
+
+            for (const name of cacheNames) {
+                if (name !== CACHE_NAME) {
+                    await caches.delete(name);
+                }
+            }
+
+            // 检查当前缓存是否过期
+            const cache = await caches.open(CACHE_NAME);
+            const response = await cache.match(`${API_BASE_URL}/birds?cache_meta=1`);
+
+            if (response) {
+                const data = await response.json();
+                const cacheTime = new Date(data.cacheTime).getTime();
+                const expirationTime = cacheTime + (CACHE_EXPIRATION_DAYS * 24 * 60 * 60 * 1000);
+
+                if (currentTime > expirationTime) {
+                    await caches.delete(CACHE_NAME);
+                    console.log('Expired cache deleted');
+                }
+            }
+        } catch (error) {
+            console.error('Cache cleanup failed:', error);
+        }
     }
 
     // 设置事件监听器
@@ -237,7 +315,7 @@
     }
 
     // 获取鸟类列表
-    function fetchBirds(page = 1, searchTerm = '') {
+    async function fetchBirds(page = 1, searchTerm = '', forceRefresh = false) {
         if (isLoading || !hasMoreData) return Promise.resolve();
 
         isLoading = true;
@@ -249,70 +327,221 @@
 
         if (page === 1) {
             birdGallery.innerHTML = `
-            <div class="col-span-full text-center py-12">
-                <div class="inline-block animate-spin h-12 w-12 border-b-2 border-primary"></div>
-                <p class="text-gray-500 mt-4">加载鸟类数据中...</p>
-            </div>
+        <div class="col-span-full text-center py-12">
+            <div class="inline-block animate-spin h-12 w-12 border-b-2 border-primary"></div>
+            <p class="text-gray-500 mt-4">加载鸟类数据中...</p>
+        </div>
         `;
         }
 
-        return fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('获取鸟类数据失败');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (page === 1) {
-                    birdGallery.innerHTML = '';
-                }
+        try {
+            let response;
 
-                if (data.birds.length === 0) {
-                    if (page === 1) {
-                        birdGallery.innerHTML = `
-                        <div class="col-span-full text-center py-12">
-                            <i class="fa fa-search text-gray-400 text-4xl mb-4"></i>
-                            <p class="text-gray-500">没有找到匹配的鸟类</p>
-                        </div>
-                    `;
-                        loadMoreBtn.classList.add('hidden'); // 第一页就没数据时隐藏按钮
-                    } else {
-                        hasMoreData = false;
-                        showNotification('没有更多数据了');
-                        updateLoadMoreButton(false); // 关键修改：更新按钮状态
-                    }
-                    return;
-                }
-
-                data.birds.forEach(bird => {
-                    const birdCard = createBirdCard(bird);
-                    birdGallery.appendChild(birdCard);
+            // 根据isServiceWorkerEnabled决定请求方式
+            if (window.isServiceWorkerEnabled) {
+                // 使用缓存策略
+                response = await fetchWithCache(url, forceRefresh);
+            } else {
+                // 直接从网络获取，不使用缓存
+                response = await fetch(url, {
+                    cache: 'no-store'
                 });
 
-                currentPage = page;
-                hasMoreData = data.hasMore;
+                // 检查响应状态
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            }
 
-                // 根据是否有更多数据更新按钮状态
-                updateLoadMoreButton(data.hasMore);
-            })
-            .catch(error => {
-                console.error('Error fetching birds:', error);
-                showNotification('加载鸟类数据失败');
+            const data = await response.json();
 
+            if (page === 1) {
+                birdGallery.innerHTML = '';
+            }
+
+            if (data.birds.length === 0) {
                 if (page === 1) {
                     birdGallery.innerHTML = `
-                    <div class="col-span-full text-center py-12">
-                        <i class="fa fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
-                        <p class="text-gray-500">加载鸟类数据失败，请稍后再试</p>
-                    </div>
+                <div class="col-span-full text-center py-12">
+                    <i class="fa fa-search text-gray-400 text-4xl mb-4"></i>
+                    <p class="text-gray-500">没有找到匹配的鸟类</p>
+                </div>
                 `;
+                    loadMoreBtn.classList.add('hidden');
+                } else {
+                    hasMoreData = false;
+                    showNotification('没有更多数据了');
+                    updateLoadMoreButton(false);
                 }
-                throw error;
-            })
-            .finally(() => {
-                isLoading = false;
+                return;
+            }
+
+            data.birds.forEach(bird => {
+                const birdCard = createBirdCard(bird);
+                birdGallery.appendChild(birdCard);
             });
+
+            currentPage = page;
+            hasMoreData = data.hasMore;
+            updateLoadMoreButton(data.hasMore);
+        } catch (error) {
+            console.error('Fetching birds failed:', error);
+
+            // 如果是无缓存模式，直接显示错误信息
+            if (!window.isServiceWorkerEnabled) {
+                showNoDataMessage(page);
+                showNotification('无法加载数据，请检查网络连接', 'error');
+                return;
+            }
+
+            // 网络请求失败，尝试从缓存获取（仅在Service Worker启用时）
+            try {
+                const cache = await caches.open(CACHE_NAME);
+                const cachedResponse = await cache.match(url);
+
+                if (cachedResponse) {
+                    showNotification('使用缓存数据，内容可能不是最新的', 'warning');
+
+                    const data = await cachedResponse.json();
+
+                    if (page === 1) {
+                        birdGallery.innerHTML = '';
+                    }
+
+                    if (data.birds && data.birds.length > 0) {
+                        data.birds.forEach(bird => {
+                            const birdCard = createBirdCard(bird);
+                            birdGallery.appendChild(birdCard);
+                        });
+
+                        currentPage = page;
+                        hasMoreData = data.hasMore || false;
+                        updateLoadMoreButton(data.hasMore || false);
+
+                        // 添加刷新缓存按钮
+                        if (page === 1) {
+                            addRefreshCacheButton();
+                        }
+                    } else {
+                        showNoDataMessage(page);
+                    }
+                } else {
+                    showNoDataMessage(page);
+                    throw new Error('No cached data available');
+                }
+            } catch (cacheError) {
+                console.error('Cache fetch failed:', cacheError);
+                showNoDataMessage(page);
+                showNotification('无法加载数据，请检查网络连接', 'error');
+            }
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    // 辅助函数：显示无数据消息
+    function showNoDataMessage(page) {
+        if (page === 1) {
+            birdGallery.innerHTML = `
+        <div class="col-span-full text-center py-12">
+            <i class="fa fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
+            <p class="text-gray-500">无法加载数据，请检查网络连接</p>
+            <button id="retry-load" class="btn-primary mt-4">
+                <i class="fa fa-refresh mr-2"></i>重试
+            </button>
+        </div>
+        `;
+
+            document.getElementById('retry-load').addEventListener('click', () => {
+                fetchBirds(1, searchInput.value.toLowerCase().trim(), true);
+            });
+        }
+    }
+
+    // 添加刷新缓存按钮
+    function addRefreshCacheButton() {
+        // 如果是无缓存模式，不显示刷新缓存按钮
+        if (!window.isServiceWorkerEnabled) return;
+
+        const existingRefreshBtn = document.getElementById('refresh-cache-btn');
+        if (existingRefreshBtn) return;
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.id = 'refresh-cache-btn';
+        refreshBtn.className = 'btn-outline mt-4';
+        refreshBtn.innerHTML = '<i class="fa fa-refresh mr-2"></i>刷新缓存数据';
+
+        const notificationDiv = document.createElement('div');
+        notificationDiv.className = 'text-sm text-gray-500 mt-2';
+        notificationDiv.textContent = '您正在查看缓存数据，点击上方按钮刷新';
+
+        const container = document.createElement('div');
+        container.className = 'col-span-full text-center';
+        container.appendChild(refreshBtn);
+        container.appendChild(notificationDiv);
+
+        birdGallery.appendChild(container);
+
+        refreshBtn.addEventListener('click', () => {
+            refreshBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>刷新中...';
+            fetchBirds(1, searchInput.value.toLowerCase().trim(), true);
+        });
+    }
+
+    // 带缓存功能的 fetch 函数
+    async function fetchWithCache(url, forceRefresh = false) {
+        // 如果是无缓存模式，直接从网络获取
+        if (!window.isServiceWorkerEnabled) {
+            const response = await fetch(url, {
+                cache: 'no-store'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return response;
+        }
+
+        const cache = await caches.open(CACHE_NAME);
+
+        if (!forceRefresh) {
+            const cachedResponse = await cache.match(url);
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+        }
+
+        try {
+            const networkResponse = await fetch(url);
+
+            if (networkResponse.ok) {
+                // 克隆响应以同时存入缓存
+                const responseToCache = networkResponse.clone();
+
+                // 添加缓存时间元数据
+                const responseData = await responseToCache.json();
+                responseData.cacheTime = new Date().toISOString();
+
+                // 创建新的可缓存响应
+                const cacheResponse = new Response(JSON.stringify(responseData), {
+                    headers: networkResponse.headers
+                });
+
+                await cache.put(url, cacheResponse);
+            }
+
+            return networkResponse;
+        } catch (error) {
+            // 如果网络请求失败，尝试返回缓存
+            if (!forceRefresh) {
+                const cachedResponse = await cache.match(url);
+                if (cachedResponse) {
+                    return cachedResponse;
+                }
+            }
+            throw error;
+        }
     }
 
     // 新增：更新加载更多按钮状态
@@ -647,8 +876,27 @@
     }
 
     // 显示通知
-    function showNotification(message) {
+    function showNotification(message, type = 'info') {
         notification.textContent = message;
+
+        // 重置所有样式类
+        notification.className = 'fixed bottom-4 right-4 px-4 py-2 border-2 border-black p-4 transform transition-all duration-500 translate-y-20 opacity-0 z-50';
+
+        // 根据类型添加样式
+        switch (type) {
+            case 'error':
+                notification.classList.add('bg-red-500', 'text-white');
+                break;
+            case 'warning':
+                notification.classList.add('bg-yellow-500', 'text-black');
+                break;
+            case 'success':
+                notification.classList.add('bg-green-500', 'text-white');
+                break;
+            default:
+                notification.classList.add('bg-primary', 'text-white');
+        }
+
         notification.classList.remove('translate-y-20', 'opacity-0');
 
         setTimeout(() => {
