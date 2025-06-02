@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>常见鸟类辨识图鉴</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#111111',
+                        secondary: '#303030',
+                        neutral: '#e5e7eb',
+                        dark: '#212529'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+
+            .card-hover {
+                @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+            }
+
+            .btn-primary {
+                @apply bg-primary hover:bg-secondary text-white font-medium py-2 px-4 transition-all duration-300;
+            }
+
+            .btn-outline {
+                @apply border border-primary text-primary hover:bg-primary hover:text-white font-medium py-2 px-4 transition-all duration-300;
+            }
+
+            /* 强制每行4列的网格布局 */
+            .gallery-fixed-cols {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-dark min-h-screen flex flex-col">
+<!-- 导航栏 -->
+<header class="bg-white border-b-2 border-black p-4 fixed w-full z-50 transition-all duration-300" id="navbar">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-2">
+            <i class="fa fa-dove text-primary text-5xl"></i>
+            <h1 class="text-lg md:text-2xl lg:text-3xl font-bold text-primary">常见鸟类辨识图鉴</h1>
+        </div>
+        <button id="add-bird-btn" class="btn-primary flex items-center">
+            <i class="fa fa-plus mr-2"></i>添加鸟类
+        </button>
+    </div>
+</header>
+
+<!-- 主内容区 -->
+<main class="container mx-auto px-4 pt-24 pb-16 flex-grow">
+    <!-- 搜索 -->
+    <div class="mb-4 mt-8 bg-white border-2 border-black p-4 p-6">
+        <div class="relative w-full">
+            <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="search-input" placeholder="搜索鸟类名称..."
+                   class="w-full pl-10 pr-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
+        </div>
+    </div>
+
+    <!-- 鸟类统计 -->
+    <div class="flex flex-row gap-[12px] mb-8 md:mb-16">
+        <div class="bg-white border-2 border-black p-4 p-6 flex items-center flex-1">
+            <div class="w-12 h-12 bg-primary/10 flex items-center justify-center mr-4">
+                <i class="fa fa-database text-primary text-xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500 text-sm">鸟类数</p>
+                <p class="text-2xl font-bold" id="bird-count">0</p>
+            </div>
+        </div>
+        <div class="bg-white border-2 border-black p-4 p-6 flex items-center flex-1">
+            <div class="w-12 h-12 bg-secondary/10 flex items-center justify-center mr-4">
+                <i class="fa fa-image text-secondary text-xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500 text-sm">图片数</p>
+                <p class="text-2xl font-bold" id="image-count">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 鸟类画廊 -->
+    <div id="bird-gallery" class="grid gallery-fixed-cols gap-1 md:gap-8">
+        <!-- 鸟类卡片将通过JavaScript动态生成 -->
+        <div class="col-span-full text-center py-12">
+            <div class="inline-block animate-spin h-12 w-12 border-b-2 border-primary"></div>
+            <p class="text-gray-500 mt-4">加载鸟类数据中...</p>
+        </div>
+    </div>
+
+    <!-- 加载更多 -->
+    <div class="mt-12 text-center">
+        <button id="load-more" class="btn-primary px-8">
+            <i class="fa fa-refresh mr-2"></i>加载更多
+        </button>
+    </div>
+</main>
+
+<!-- 添加/编辑鸟类模态框 -->
+<div id="bird-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white shadow-2xl w-full max-w-lg mx-4 transform transition-all duration-300 scale-95 opacity-0"
+         id="modal-content">
+        <div class="flex justify-between items-center p-6 border-b">
+            <h2 class="text-xl font-bold text-primary" id="modal-title">添加新鸟类</h2>
+            <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="bird-form" enctype="multipart/form-data">
+                <input type="hidden" id="bird-id" name="bird-id">
+                <div class="mb-4">
+                    <label for="bird-name" class="block text-sm font-medium text-gray-700 mb-1">鸟类名称</label>
+                    <input type="text" id="bird-name" name="bird-name" placeholder="输入鸟类名称"
+                           class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">鸟类图片</label>
+                    <div class="border-2 border-dashed border-gray-300 p-6 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                         id="image-upload-area">
+                        <input type="file" id="bird-image" name="bird-image" accept="image/*" class="hidden">
+                        <i class="fa fa-cloud-upload text-gray-400 text-3xl mb-2"></i>
+                        <p class="text-gray-500 mb-1">点击或拖拽图片到这里上传</p>
+                        <p class="text-xs text-gray-400">支持 JPG, PNG 格式，最大 5MB</p>
+                    </div>
+                    <div id="image-preview-container" class="hidden mt-3">
+                        <img id="image-preview" src="" alt="预览图" class="w-full h-40 object-cover">
+                        <button type="button" id="remove-image" class="mt-2 text-red-500 text-sm hover:text-red-700">
+                            <i class="fa fa-trash-o mr-1"></i>移除图片
+                        </button>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" id="cancel-bird" class="btn-outline">取消</button>
+                    <button type="submit" class="btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 通知组件 -->
+<div id="notification"
+     class="fixed bottom-4 right-4 bg-primary text-white px-4 py-2 border-2 border-black p-4 transform transition-all duration-500 translate-y-20 opacity-0 z-50"></div>
+
+<script>
+    // API配置
+    // 根据当前域名动态设置 API 基础 URL
+    const API_BASE_URL = (() => {
+        // 开发环境使用 localhost
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'http://localhost:3000/api';
+        }
+        // 生产环境使用当前域名
+        return `${window.location.protocol}//${window.location.host}/api`;
+    })();
+    let currentBirdId = null; // 当前操作的鸟类ID
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMoreData = true;
+
+    // DOM 元素
+    const addBirdBtn = document.getElementById('add-bird-btn');
+    const birdModal = document.getElementById('bird-modal');
+    const modalContent = document.getElementById('modal-content');
+    const closeModal = document.getElementById('close-modal');
+    const cancelBird = document.getElementById('cancel-bird');
+    const birdForm = document.getElementById('bird-form');
+    const birdIdInput = document.getElementById('bird-id');
+    const birdNameInput = document.getElementById('bird-name');
+    const birdImageInput = document.getElementById('bird-image');
+    const imageUploadArea = document.getElementById('image-upload-area');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    const imagePreview = document.getElementById('image-preview');
+    const removeImageBtn = document.getElementById('remove-image');
+    const birdGallery = document.getElementById('bird-gallery');
+    const birdCountElement = document.getElementById('bird-count');
+    const imageCountElement = document.getElementById('image-count');
+    const navbar = document.getElementById('navbar');
+    const searchInput = document.getElementById('search-input');
+    const loadMoreBtn = document.getElementById('load-more');
+    const notification = document.getElementById('notification');
+    const modalTitle = document.getElementById('modal-title');
+
+    // 初始化页面
+    function init() {
+        setupEventListeners();
+        fetchBirds();
+        fetchBirdCount();
+    }
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 添加鸟类按钮点击事件
+        addBirdBtn.addEventListener('click', () => openBirdModal('add'));
+
+        // 关闭模态框按钮点击事件
+        closeModal.addEventListener('click', closeBirdModal);
+        cancelBird.addEventListener('click', closeBirdModal);
+
+        // 鸟类表单提交事件
+        birdForm.addEventListener('submit', handleBirdFormSubmit);
+
+        // 图片上传区域点击事件
+        imageUploadArea.addEventListener('click', () => birdImageInput.click());
+
+        // 图片选择事件
+        birdImageInput.addEventListener('change', handleImageUpload);
+
+        // 移除图片按钮点击事件
+        removeImageBtn.addEventListener('click', removeImagePreview);
+
+        // 滚动事件 - 导航栏样式变化
+        window.addEventListener('scroll', handleScroll);
+
+        // 搜索输入事件
+        searchInput.addEventListener('input', handleSearch);
+
+        // 加载更多按钮点击事件
+        loadMoreBtn.addEventListener('click', loadMoreBirds);
+    }
+
+    // 获取鸟类列表
+    function fetchBirds(page = 1, searchTerm = '') {
+        if (isLoading || !hasMoreData) return Promise.resolve();
+
+        isLoading = true;
+
+        let url = `${API_BASE_URL}/birds?page=${page}`;
+        if (searchTerm) {
+            url += `&search=${encodeURIComponent(searchTerm)}`;
+        }
+
+        if (page === 1) {
+            birdGallery.innerHTML = `
+            <div class="col-span-full text-center py-12">
+                <div class="inline-block animate-spin h-12 w-12 border-b-2 border-primary"></div>
+                <p class="text-gray-500 mt-4">加载鸟类数据中...</p>
+            </div>
+        `;
+        }
+
+        return fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('获取鸟类数据失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (page === 1) {
+                    birdGallery.innerHTML = '';
+                }
+
+                if (data.birds.length === 0) {
+                    if (page === 1) {
+                        birdGallery.innerHTML = `
+                        <div class="col-span-full text-center py-12">
+                            <i class="fa fa-search text-gray-400 text-4xl mb-4"></i>
+                            <p class="text-gray-500">没有找到匹配的鸟类</p>
+                        </div>
+                    `;
+                        loadMoreBtn.classList.add('hidden'); // 第一页就没数据时隐藏按钮
+                    } else {
+                        hasMoreData = false;
+                        showNotification('没有更多数据了');
+                        updateLoadMoreButton(false); // 关键修改：更新按钮状态
+                    }
+                    return;
+                }
+
+                data.birds.forEach(bird => {
+                    const birdCard = createBirdCard(bird);
+                    birdGallery.appendChild(birdCard);
+                });
+
+                currentPage = page;
+                hasMoreData = data.hasMore;
+
+                // 根据是否有更多数据更新按钮状态
+                updateLoadMoreButton(data.hasMore);
+            })
+            .catch(error => {
+                console.error('Error fetching birds:', error);
+                showNotification('加载鸟类数据失败');
+
+                if (page === 1) {
+                    birdGallery.innerHTML = `
+                    <div class="col-span-full text-center py-12">
+                        <i class="fa fa-exclamation-triangle text-red-500 text-4xl mb-4"></i>
+                        <p class="text-gray-500">加载鸟类数据失败，请稍后再试</p>
+                    </div>
+                `;
+                }
+                throw error;
+            })
+            .finally(() => {
+                isLoading = false;
+            });
+    }
+
+    // 新增：更新加载更多按钮状态
+    function updateLoadMoreButton(hasMore) {
+        if (hasMore) {
+            // 有更多数据时显示正常按钮
+            loadMoreBtn.innerHTML = '<i class="fa fa-refresh mr-2"></i>加载更多';
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            // 没有更多数据时显示"到底了"
+            loadMoreBtn.innerHTML = '<i class="fa fa-check mr-2"></i>到底了';
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    // 获取鸟类总数
+    function fetchBirdCount() {
+        fetch(`${API_BASE_URL}/birds/count`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('获取鸟类数量失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                birdCountElement.textContent = data.type;
+                imageCountElement.textContent = data.count;
+            })
+            .catch(error => {
+                console.error('Error fetching bird count:', error);
+                showNotification('获取鸟类数量失败');
+            });
+    }
+
+    // 打开鸟类模态框
+    function openBirdModal(mode, birdId = null) {
+        currentBirdId = birdId;
+
+        if (mode === 'add') {
+            modalTitle.textContent = '添加新鸟类';
+            birdIdInput.value = '';
+            birdForm.reset();
+            removeImagePreview();
+        } else if (mode === 'edit') {
+            modalTitle.textContent = '编辑鸟类';
+
+            fetch(`${API_BASE_URL}/birds/${birdId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('获取鸟类数据失败');
+                    }
+                    return response.json();
+                })
+                .then(bird => {
+                    birdIdInput.value = bird.id;
+                    birdNameInput.value = bird.name;
+
+                    // 显示现有图片
+                    if (bird.imageUrl) {
+                        imagePreview.src = `${API_BASE_URL}/images/${bird.imageUrl}`;
+                        imagePreviewContainer.classList.remove('hidden');
+                        imageUploadArea.classList.add('hidden');
+                    } else {
+                        removeImagePreview();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching bird:', error);
+                    showNotification('获取鸟类数据失败');
+                    closeBirdModal();
+                });
+        }
+
+        birdModal.classList.remove('hidden');
+        setTimeout(() => {
+            modalContent.classList.remove('scale-95', 'opacity-0');
+            modalContent.classList.add('scale-100', 'opacity-100');
+        }, 10);
+    }
+
+    // 关闭鸟类模态框
+    function closeBirdModal() {
+        modalContent.classList.remove('scale-100', 'opacity-100');
+        modalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            birdModal.classList.add('hidden');
+            currentBirdId = null;
+        }, 300);
+    }
+
+    // 处理图片上传
+    function handleImageUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            imagePreview.src = event.target.result;
+            imagePreviewContainer.classList.remove('hidden');
+            imageUploadArea.classList.add('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // 移除图片预览
+    function removeImagePreview() {
+        birdImageInput.value = '';
+        imagePreviewContainer.classList.add('hidden');
+        imageUploadArea.classList.remove('hidden');
+    }
+
+    // 处理鸟类表单提交
+    function handleBirdFormSubmit(e) {
+        e.preventDefault();
+
+        const name = birdNameInput.value.trim();
+        const imageFile = birdImageInput.files[0];
+
+        if (!name) {
+            showNotification('请输入鸟类名称');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('name', name);
+
+        if (imageFile) {
+            formData.append('image', imageFile);
+        }
+
+        let url, method;
+
+        if (currentBirdId) {
+            // 编辑现有鸟类
+            url = `${API_BASE_URL}/birds/${currentBirdId}`;
+            method = 'PUT';
+        } else {
+            // 添加新鸟类
+            url = `${API_BASE_URL}/birds`;
+            method = 'POST';
+        }
+
+        fetch(url, {
+            method: method,
+            body: formData
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('保存鸟类数据失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                fetchBirds();
+                fetchBirdCount();
+                closeBirdModal();
+                showNotification(currentBirdId ? '鸟类更新成功' : '鸟类添加成功');
+            })
+            .catch(error => {
+                console.error('Error saving bird:', error);
+                showNotification('保存鸟类数据失败');
+            });
+    }
+
+    // 创建鸟类卡片
+    function createBirdCard(bird) {
+        const card = document.createElement('div');
+        card.className = 'bird-card p-0.5 overflow-hidden card-hover';
+        card.setAttribute('data-id', bird.id);
+
+        // 判断是否为管理员模式
+        const isAdminMode = checkAdminMode(); // 假设存在一个检查管理员模式的函数
+
+        // 创建图片容器
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'relative overflow-hidden';
+
+        // 创建图片元素
+        const img = document.createElement('img');
+        img.src = bird.imageUrl ? `${API_BASE_URL}/images/${bird.imageUrl}` : 'https://picsum.photos/seed/default/400/300';
+        img.alt = bird.name;
+        img.className = 'w-full h-full object-cover';
+
+        // 图片加载完成后计算宽高比并设置容器和卡片样式
+        img.onload = function () {
+            const width = this.naturalWidth;
+            const height = this.naturalHeight;
+            const aspectRatio = width / height;
+
+            // 重置卡片和容器样式
+            card.style.width = '';
+            card.style.height = '';
+            imgContainer.style.width = '';
+            imgContainer.style.height = '';
+            imgContainer.style.maxWidth = '';
+            imgContainer.style.margin = '';
+
+            // 获取屏幕宽高
+            const screenWidth = window.screen.width;
+            const screenHeight = window.screen.height;
+
+            // 计算屏幕宽高比
+            const screenAspectRatio = screenWidth / screenHeight;
+
+            // 宽图：固定高度，限制宽度
+            const isMobile = screenAspectRatio < 0.75;
+            const containerHeight = isMobile ? 100 : 168;
+            const containerWidth = containerHeight * aspectRatio;
+
+            imgContainer.style.height = `${containerHeight}px`;
+            imgContainer.style.width = `${containerWidth}px`;
+            imgContainer.style.maxWidth = '100%';
+            imgContainer.style.margin = '0 auto';
+        };
+
+        // 错误处理
+        img.onerror = function () {
+            // 使用默认图片并应用相同的宽高比逻辑
+            this.src = 'https://picsum.photos/seed/error/400/300';
+            this.onload(); // 触发默认图片的加载事件
+        };
+
+        // 将图片添加到容器
+        imgContainer.appendChild(img);
+
+        // 设置卡片内容
+        card.innerHTML = `
+        <div class="p-1">
+            <div class="flex ${isAdminMode ? 'justify-between' : 'justify-center'} items-center">
+                <h3 class="font-bold text-lg md:text-l lg:text-2xl ${!isAdminMode ? 'text-center' : ''}">${bird.name}</h3>
+                ${isAdminMode ? `
+                <div class="flex space-x-2">
+                    <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 edit-btn" data-id="${bird.id}">
+                        <i class="fa fa-pencil text-primary"></i>
+                    </button>
+                    <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 delete-btn" data-id="${bird.id}">
+                        <i class="fa fa-trash-o text-red-500"></i>
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        `;
+
+        // 将图片容器插入到卡片开头
+        card.insertBefore(imgContainer, card.firstChild);
+
+        // 只有管理员模式下才添加按钮事件
+        if (isAdminMode) {
+            const editBtn = card.querySelector('.edit-btn');
+            const deleteBtn = card.querySelector('.delete-btn');
+
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const birdId = parseInt(e.currentTarget.getAttribute('data-id'));
+                openBirdModal('edit', birdId);
+            });
+
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const birdId = parseInt(e.currentTarget.getAttribute('data-id'));
+                deleteBird(birdId);
+            });
+        }
+
+        return card;
+    }
+
+    // 示例：检查是否为管理员模式的函数（需根据实际情况实现）
+    function checkAdminMode() {
+        // 这里应根据实际业务逻辑判断，例如：
+        // return localStorage.getItem('userRole') === 'admin';
+        // 或
+        // return currentUser && currentUser.isAdmin;
+        return false; // 默认返回false，实际使用时替换为真实判断逻辑
+    }
+
+    // 删除鸟类
+    function deleteBird(birdId) {
+        if (confirm('确定要删除这个鸟类吗？')) {
+            fetch(`${API_BASE_URL}/birds/${birdId}`, {
+                method: 'DELETE'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('删除鸟类失败');
+                    }
+                    fetchBirds();
+                    fetchBirdCount();
+                    showNotification('鸟类已删除');
+                })
+                .catch(error => {
+                    console.error('Error deleting bird:', error);
+                    showNotification('删除鸟类失败');
+                });
+        }
+    }
+
+    // 处理滚动事件
+    function handleScroll() {
+        if (window.scrollY > 10) {
+            // 分别添加和移除每个类
+            navbar.classList.add('py-2');
+            navbar.classList.remove('py-3');
+        } else {
+            // 分别添加和移除每个类
+            navbar.classList.add('py-3');
+            navbar.classList.remove('py-2');
+        }
+    }
+
+    // 处理搜索
+    function handleSearch() {
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        fetchBirds(1, searchTerm);
+    }
+
+    // 加载更多鸟类
+    function loadMoreBirds() {
+        if (isLoading || !hasMoreData) return;
+
+        loadMoreBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>加载中...';
+
+        fetchBirds(currentPage + 1, searchInput.value.toLowerCase().trim())
+            .catch(error => {
+                console.error('加载更多鸟类失败:', error);
+                showNotification('加载更多鸟类失败');
+                loadMoreBtn.innerHTML = '<i class="fa fa-refresh mr-2"></i>加载更多';
+            });
+    }
+
+    // 显示通知
+    function showNotification(message) {
+        notification.textContent = message;
+        notification.classList.remove('translate-y-20', 'opacity-0');
+
+        setTimeout(() => {
+            notification.classList.add('translate-y-20', 'opacity-0');
+        }, 3000);
+    }
+
+    // 初始化页面
+    init();
+</script>
+</body>
+</html>
