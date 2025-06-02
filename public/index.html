@@ -57,7 +57,7 @@
             <h1 class="text-lg md:text-2xl lg:text-3xl font-bold text-primary">常见鸟类辨识图鉴</h1>
         </div>
         <button id="add-bird-btn" class="btn-primary flex items-center">
-            <i class="fa fa-plus mr-2"></i>添加鸟类
+            <i class="fa fa-plus mr-2"></i>添加
         </button>
     </div>
 </header>
@@ -117,7 +117,7 @@
     <div class="bg-white shadow-2xl w-full max-w-lg mx-4 transform transition-all duration-300 scale-95 opacity-0"
          id="modal-content">
         <div class="flex justify-between items-center p-6 border-b">
-            <h2 class="text-xl font-bold text-primary" id="modal-title">添加新鸟类</h2>
+            <h2 class="text-xl font-bold text-primary" id="modal-title">上传夜鹭拟态图鉴</h2>
             <button id="close-modal" class="text-gray-400 hover:text-gray-600">
                 <i class="fa fa-times text-xl"></i>
             </button>
@@ -126,12 +126,12 @@
             <form id="bird-form" enctype="multipart/form-data">
                 <input type="hidden" id="bird-id" name="bird-id">
                 <div class="mb-4">
-                    <label for="bird-name" class="block text-sm font-medium text-gray-700 mb-1">鸟类名称</label>
+                    <label for="bird-name" class="block text-sm font-medium text-gray-700 mb-1">名称</label>
                     <input type="text" id="bird-name" name="bird-name" placeholder="输入鸟类名称"
                            class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
                 </div>
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">鸟类图片</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">图片（越包浆越有味）</label>
                     <div class="border-2 border-dashed border-gray-300 p-6 text-center cursor-pointer hover:bg-gray-50 transition-colors"
                          id="image-upload-area">
                         <input type="file" id="bird-image" name="bird-image" accept="image/*" class="hidden">
@@ -160,32 +160,32 @@
      class="fixed bottom-4 right-4 bg-primary text-white px-4 py-2 border-2 border-black p-4 transform transition-all duration-500 translate-y-20 opacity-0 z-50"></div>
 
 <script>
-    // 注册 Service Worker
     window.isServiceWorkerEnabled = false; // 全局标志，默认禁用
 
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js')
-                .then(registration => {
-                    console.log('SW registered:', registration);
-                    window.isServiceWorkerEnabled = true; // 注册成功，启用缓存
-                })
-                .catch(error => {
-                    console.log('SW registration failed:', error);
-                    // 注册失败时清除可能存在的旧缓存
-                    if ('caches' in window) {
-                        caches.keys().then(cacheNames => {
-                            return Promise.all(
-                                cacheNames.map(cacheName => {
-                                    return caches.delete(cacheName);
-                                })
-                            );
-                        });
-                    }
-                    window.isServiceWorkerEnabled = false; // 禁用缓存
-                });
-        });
-    }
+    // 注册 Service Worker
+    // if ('serviceWorker' in navigator) {
+    //     window.addEventListener('load', () => {
+    //         navigator.serviceWorker.register('/sw.js')
+    //             .then(registration => {
+    //                 console.log('SW registered:', registration);
+    //                 window.isServiceWorkerEnabled = true; // 注册成功，启用缓存
+    //             })
+    //             .catch(error => {
+    //                 console.log('SW registration failed:', error);
+    //                 // 注册失败时清除可能存在的旧缓存
+    //                 if ('caches' in window) {
+    //                     caches.keys().then(cacheNames => {
+    //                         return Promise.all(
+    //                             cacheNames.map(cacheName => {
+    //                                 return caches.delete(cacheName);
+    //                             })
+    //                         );
+    //                     });
+    //                 }
+    //                 window.isServiceWorkerEnabled = false; // 禁用缓存
+    //             });
+    //     });
+    // }
 
     // API配置
     // 根据当前域名动态设置 API 基础 URL
@@ -235,6 +235,67 @@
             fetchBirdCount();
         });
     }
+
+    // 防抖函数
+    function debounce(func, delay) {
+        let timeout;
+        return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
+
+    // 优化后的防抖函数（带输入长度判断）
+    function debounceSearch(func, delay) {
+        let timeout;
+        return function() {
+            const context = this;
+            const args = arguments;
+            const inputValue = this.value.trim(); // 获取输入框的值
+
+            // 清除之前的定时器
+            clearTimeout(timeout);
+
+            // 如果输入框为空或已达到最小搜索长度，立即执行搜索
+            if (inputValue.length === 0 || inputValue.length >= 1) {
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            }
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('search-input');
+        const searchDebounced = debounceSearch(() => {
+            const searchTerm = searchInput.value.trim();
+            if (searchTerm === '') {
+                // 内容为空时重置搜索（显示全部鸟类）
+                fetchBirds(1, '');
+                return;
+            }
+            // 执行搜索逻辑
+            fetchBirds(1, searchTerm);
+        }, 750); // 延时750ms执行搜索
+
+        // 监听输入框内容变化
+        searchInput.addEventListener('input', searchDebounced);
+
+        // 模拟搜索API调用（实际项目中替换为真实API请求）
+        function fetchSearchResults(searchTerm) {
+            // 示例：使用Fetch调用后端API
+            fetch(`/api/birds?search=${encodeURIComponent(searchTerm)}`)
+                .then(response => response.json())
+                .then(data => {
+                    // 处理搜索结果（更新UI）
+                    console.log('搜索结果：', data);
+                    // 这里添加更新鸟类列表的逻辑
+                })
+                .catch(error => {
+                    console.error('搜索错误：', error);
+                });
+        }
+    });
 
     // 在 init() 函数中添加缓存初始化
     async function initCache() {
@@ -316,7 +377,7 @@
 
     // 获取鸟类列表
     async function fetchBirds(page = 1, searchTerm = '', forceRefresh = false) {
-        if (isLoading || !hasMoreData) return Promise.resolve();
+        if (isLoading || (!page && page !== 1)) return Promise.resolve();
 
         isLoading = true;
 
@@ -583,7 +644,7 @@
         currentBirdId = birdId;
 
         if (mode === 'add') {
-            modalTitle.textContent = '添加新鸟类';
+            modalTitle.textContent = '上传夜鹭拟态图鉴';
             birdIdInput.value = '';
             birdForm.reset();
             removeImagePreview();
@@ -728,9 +789,9 @@
         img.className = 'w-full h-full object-cover';
 
         // 图片加载完成后计算宽高比并设置容器和卡片样式
-        img.onload = function () {
-            const width = this.naturalWidth;
-            const height = this.naturalHeight;
+        function updateCardStyles() {
+            const width = img.naturalWidth || 400; // 默认值以防未加载
+            const height = img.naturalHeight || 300;
             const aspectRatio = width / height;
 
             // 重置卡片和容器样式
@@ -741,11 +802,9 @@
             imgContainer.style.maxWidth = '';
             imgContainer.style.margin = '';
 
-            // 获取屏幕宽高
-            const screenWidth = window.screen.width;
-            const screenHeight = window.screen.height;
-
-            // 计算屏幕宽高比
+            // 使用 window.innerWidth/Height 更准确反映可见区域
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
             const screenAspectRatio = screenWidth / screenHeight;
 
             // 宽图：固定高度，限制宽度
@@ -757,7 +816,9 @@
             imgContainer.style.width = `${containerWidth}px`;
             imgContainer.style.maxWidth = '100%';
             imgContainer.style.margin = '0 auto';
-        };
+        }
+
+        img.onload = updateCardStyles;
 
         // 错误处理
         img.onerror = function () {
@@ -771,22 +832,22 @@
 
         // 设置卡片内容
         card.innerHTML = `
-        <div class="p-1">
-            <div class="flex ${isAdminMode ? 'justify-between' : 'justify-center'} items-center">
-                <h3 class="font-bold text-lg md:text-l lg:text-2xl ${!isAdminMode ? 'text-center' : ''}">${bird.name}</h3>
-                ${isAdminMode ? `
-                <div class="flex space-x-2">
-                    <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 edit-btn" data-id="${bird.id}">
-                        <i class="fa fa-pencil text-primary"></i>
-                    </button>
-                    <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 delete-btn" data-id="${bird.id}">
-                        <i class="fa fa-trash-o text-red-500"></i>
-                    </button>
-                </div>
-                ` : ''}
+    <div class="p-1">
+        <div class="flex ${isAdminMode ? 'justify-between' : 'justify-center'} items-center">
+            <h3 class="font-bold text-lg md:text-l lg:text-2xl ${!isAdminMode ? 'text-center' : ''}">${bird.name}</h3>
+            ${isAdminMode ? `
+            <div class="flex space-x-2">
+                <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 edit-btn" data-id="${bird.id}">
+                    <i class="fa fa-pencil text-primary"></i>
+                </button>
+                <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 delete-btn" data-id="${bird.id}">
+                    <i class="fa fa-trash-o text-red-500"></i>
+                </button>
             </div>
+            ` : ''}
         </div>
-        `;
+    </div>
+    `;
 
         // 将图片容器插入到卡片开头
         card.insertBefore(imgContainer, card.firstChild);
@@ -809,16 +870,24 @@
             });
         }
 
+        // 使用防抖函数包装事件处理程序
+        const debouncedUpdate = debounce(updateCardStyles, 150);
+
+        // 监听屏幕方向变化和窗口大小调整
+        window.addEventListener('resize', debouncedUpdate);
+        window.addEventListener('orientationchange', debouncedUpdate);
+
+        // 初始调用一次以设置样式
+        if (img.complete) updateCardStyles();
+
+        // 返回卡片元素
         return card;
     }
 
     // 示例：检查是否为管理员模式的函数（需根据实际情况实现）
     function checkAdminMode() {
-        // 这里应根据实际业务逻辑判断，例如：
-        // return localStorage.getItem('userRole') === 'admin';
-        // 或
-        // return currentUser && currentUser.isAdmin;
-        return false; // 默认返回false，实际使用时替换为真实判断逻辑
+        // 如果你看到了这行代码，说明你有能力开启编辑模式
+        return true;
     }
 
     // 删除鸟类
