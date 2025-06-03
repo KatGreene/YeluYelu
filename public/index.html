@@ -164,6 +164,49 @@
     </div>
 </div>
 
+<!-- 页脚 -->
+<footer class="text-black py-2 border-t-2 border-black">
+    <div class="container mx-auto px-2">
+        <div class="flex flex-col items-center justify-center">
+            <div class="mt-1 mb-4 text-center">
+                <button id="about-btn" class="text-black hover:text-white transition-colors flex items-center mx-auto text-xl font-bold">
+                    <i class="fa fa-info-circle mr-1"></i> 关于
+                </button>
+                <a href="https://space.bilibili.com/29602970" class="underline block mt-4 text-black hover:text-white transition-colors flex">联系开发者</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- 关于模态框 -->
+<div id="about-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white shadow-2xl w-full max-w-lg mx-4 transform transition-all duration-300 scale-95 opacity-0"
+         id="about-modal-content">
+        <div class="flex justify-between items-center p-6 border-b">
+            <h2 class="text-xl font-bold text-primary">关于本网站</h2>
+            <button id="close-about-modal" class="text-gray-400 hover:text-gray-600">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <p>
+                本网站灵感来源于“夜鹭拟态图鉴”，
+                图片来自各大社群与用户上传。<br>
+                简单而言，这里你看到的所有“夜鹭”
+                都不是夜鹭，而其它的都是夜鹭。<br>
+                <a href="https://space.bilibili.com/29602970" class="text-l font-bold underline">点击此处联系开发者</a>
+            </p>
+        </div>
+        <div class="p-6 border-t">
+            <div class="flex justify-end">
+                <button id="close-about-btn" class="btn-primary">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 通知组件 -->
 <div id="notification"
      class="fixed bottom-4 right-4 bg-primary text-white px-4 py-2 border-2 border-black p-4 transform transition-all duration-500 translate-y-20 opacity-0 z-50"></div>
@@ -235,6 +278,40 @@
     const loadMoreBtn = document.getElementById('load-more');
     const notification = document.getElementById('notification');
     const modalTitle = document.getElementById('modal-title');
+    // 关于模态框控制
+    const aboutBtn = document.getElementById('about-btn');
+    const aboutModal = document.getElementById('about-modal');
+    const aboutModalContent = document.getElementById('about-modal-content');
+    const closeAboutModal = document.getElementById('close-about-modal');
+    const closeAboutBtn = document.getElementById('close-about-btn');
+
+    // 打开关于模态框
+    aboutBtn.addEventListener('click', () => {
+        aboutModal.classList.remove('hidden');
+        setTimeout(() => {
+            aboutModalContent.classList.remove('scale-95', 'opacity-0');
+            aboutModalContent.classList.add('scale-100', 'opacity-100');
+        }, 10);
+    });
+
+    // 关闭关于模态框
+    function closeAbout() {
+        aboutModalContent.classList.remove('scale-100', 'opacity-100');
+        aboutModalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            aboutModal.classList.add('hidden');
+        }, 300);
+    }
+
+    closeAboutModal.addEventListener('click', closeAbout);
+    closeAboutBtn.addEventListener('click', closeAbout);
+
+    // 点击模态框外部关闭
+    aboutModal.addEventListener('click', (e) => {
+        if (e.target === aboutModal) {
+            closeAbout();
+        }
+    });
 
     // 初始化页面
     function init() {
@@ -436,7 +513,6 @@
                     <p class="text-gray-500">没有找到匹配的鸟类</p>
                 </div>
                 `;
-                    loadMoreBtn.classList.add('hidden');
                 } else {
                     hasMoreData = false;
                     showNotification('没有更多数据了');
@@ -800,7 +876,7 @@
     // 创建鸟类卡片
     function createBirdCard(bird) {
         const card = document.createElement('div');
-        card.className = 'bird-card p-0.5 overflow-hidden card-hover';
+        card.className = 'bird-card p-0.5 card-hover mb-1.5';
         card.setAttribute('data-id', bird.id);
 
         // 判断是否为管理员模式
@@ -808,7 +884,7 @@
 
         // 创建图片容器
         const imgContainer = document.createElement('div');
-        imgContainer.className = 'relative overflow-hidden';
+        imgContainer.className = 'relative';
 
         // 创建图片元素
         const img = document.createElement('img');
@@ -836,7 +912,7 @@
             const screenAspectRatio = screenWidth / screenHeight;
 
             // 宽图：固定高度，限制宽度
-            const isMobile = screenAspectRatio < 0.75;
+            const isMobile = screenAspectRatio < 0.75 && screenWidth < 768;
             const containerHeight = isMobile ? 100 : 168;
             const containerWidth = containerHeight * aspectRatio;
 
@@ -862,7 +938,7 @@
         card.innerHTML = `
     <div class="p-1">
         <div class="flex ${isAdminMode ? 'justify-between' : 'justify-center'} items-center">
-            <h3 class="font-bold text-lg md:text-l lg:text-2xl ${!isAdminMode ? 'text-center' : ''}">${bird.name}</h3>
+            <h3 class="font-bold text-lg md:text-l lg:text-2xl ${!isAdminMode ? 'text-center' : ''} leading-tight md:leading-relaxed">${bird.name}</h3>
             ${isAdminMode ? `
             <div class="flex space-x-2">
                 <button class="bg-gray-100 p-2 cursor-pointer transition-all hover:bg-gray-200 edit-btn" data-id="${bird.id}">
