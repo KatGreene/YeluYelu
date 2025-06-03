@@ -276,6 +276,11 @@ app.get('/api/birds', async (req, res) => {
 // 获取鸟类总数和种类数
 app.get('/api/birds/count', async (req, res) => {
     try {
+        // 设置响应头，禁止缓存
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+
         // 计算不重复的鸟类名称数量
         const uniqueBirdNames = new Set(birds.map(bird => bird.name));
 

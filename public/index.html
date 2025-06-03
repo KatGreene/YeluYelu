@@ -642,7 +642,9 @@
 
     // 获取鸟类总数
     function fetchBirdCount() {
-        fetch(`${API_BASE_URL}/birds/count`)
+        fetch(`${API_BASE_URL}/birds/count`, {
+            cache: 'no-store' // 禁用缓存
+        })
             .then(response => {
                 if (!response.ok) {
                     throw new Error('获取鸟类数量失败');
