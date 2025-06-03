@@ -64,23 +64,19 @@
 
 <!-- 主内容区 -->
 <main class="container mx-auto px-4 pt-24 pb-16 flex-grow">
-    <!-- 搜索 -->
-    <div class="mb-4 mt-8 bg-white border-2 border-black p-4 p-6">
-        <div class="relative w-full">
-            <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-            <input type="text" id="search-input" placeholder="搜索鸟类名称..."
-                   class="w-full pl-10 pr-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
-        </div>
-    </div>
 
     <!-- 鸟类统计 -->
-    <div class="flex flex-row gap-[12px] mb-8 md:mb-16">
+    <div class="mb-4 mt-4 flex flex-row gap-[12px]">
         <div class="bg-white border-2 border-black p-4 p-6 flex items-center flex-1">
             <div class="w-12 h-12 bg-primary/10 flex items-center justify-center mr-4">
                 <i class="fa fa-database text-primary text-xl"></i>
             </div>
             <div>
-                <p class="text-gray-500 text-sm">鸟类数</p>
+                <p class="text-gray-500 text-sm">
+                    <span class="inline-block md:hidden">已收录</span>
+                    <span class="hidden md:inline">已收录</span>
+                    <br class="md:hidden">鸟类
+                </p>
                 <p class="text-2xl font-bold" id="bird-count">0</p>
             </div>
         </div>
@@ -89,9 +85,22 @@
                 <i class="fa fa-image text-secondary text-xl"></i>
             </div>
             <div>
-                <p class="text-gray-500 text-sm">图片数</p>
+                <p class="text-gray-500 text-sm">
+                    <span class="inline-block md:hidden">已收录</span>
+                    <span class="hidden md:inline">已收录</span>
+                    <br class="md:hidden">图片
+                </p>
                 <p class="text-2xl font-bold" id="image-count">0</p>
             </div>
+        </div>
+    </div>
+
+    <!-- 搜索 -->
+    <div class="bg-white border-2 border-black p-4 p-6 mb-8 md:mb-16">
+        <div class="relative w-full">
+            <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="search-input" placeholder="搜索鸟类名称..."
+                   class="w-full pl-10 pr-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
         </div>
     </div>
 
@@ -126,7 +135,7 @@
             <form id="bird-form" enctype="multipart/form-data">
                 <input type="hidden" id="bird-id" name="bird-id">
                 <div class="mb-4">
-                    <label for="bird-name" class="block text-sm font-medium text-gray-700 mb-1">名称</label>
+                    <label for="bird-name" class="block text-sm font-medium text-gray-700 mb-1">名称（10个字以内）</label>
                     <input type="text" id="bird-name" name="bird-name" placeholder="输入鸟类名称"
                            class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
                 </div>
@@ -137,7 +146,7 @@
                         <input type="file" id="bird-image" name="bird-image" accept="image/*" class="hidden">
                         <i class="fa fa-cloud-upload text-gray-400 text-3xl mb-2"></i>
                         <p class="text-gray-500 mb-1">点击或拖拽图片到这里上传</p>
-                        <p class="text-xs text-gray-400">支持 JPG, PNG 格式，最大 5MB</p>
+                        <p class="text-xs text-gray-400">支持 JPG, PNG 格式，最大 1MB</p>
                     </div>
                     <div id="image-preview-container" class="hidden mt-3">
                         <img id="image-preview" src="" alt="预览图" class="w-full h-40 object-cover">
@@ -720,43 +729,49 @@
     function handleBirdFormSubmit(e) {
         e.preventDefault();
 
+        const operationType = currentBirdId ? 'update' : 'create';
+        const isWithinLimit = checkOperationLimit(operationType);
+
+        if (!isWithinLimit) {
+            showNotification('您今天的操作次数已达上限（8次）');
+            return;
+        }
+
         const name = birdNameInput.value.trim();
         const imageFile = birdImageInput.files[0];
 
+        // 前端验证
         if (!name) {
             showNotification('请输入鸟类名称');
+            return;
+        }
+        if (name.length > 10) {
+            showNotification('鸟类名称不能超过10个字符');
+            return;
+        }
+
+        if (imageFile && imageFile.size > 1048576) {
+            showNotification('图片大小不能超过1MB');
             return;
         }
 
         const formData = new FormData();
         formData.append('name', name);
+        if (imageFile) formData.append('image', imageFile);
 
-        if (imageFile) {
-            formData.append('image', imageFile);
-        }
-
-        let url, method;
+        let url, method, operationDesc;
 
         if (currentBirdId) {
-            // 编辑现有鸟类
             url = `${API_BASE_URL}/birds/${currentBirdId}`;
             method = 'PUT';
+            operationDesc = `更新鸟类: ${name || '未命名'}`;
         } else {
-            // 添加新鸟类
             url = `${API_BASE_URL}/birds`;
             method = 'POST';
+            operationDesc = `新增鸟类: ${name}`;
         }
 
-        fetch(url, {
-            method: method,
-            body: formData
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('保存鸟类数据失败');
-                }
-                return response.json();
-            })
+        fetchWithLogging(url, method, formData, operationDesc)
             .then(data => {
                 fetchBirds();
                 fetchBirdCount();
@@ -764,8 +779,8 @@
                 showNotification(currentBirdId ? '鸟类更新成功' : '鸟类添加成功');
             })
             .catch(error => {
-                console.error('Error saving bird:', error);
-                showNotification('保存鸟类数据失败');
+                console.error('Error:', error);
+                showNotification(error.message || '操作失败');
             });
     }
 
@@ -893,13 +908,15 @@
     // 删除鸟类
     function deleteBird(birdId) {
         if (confirm('确定要删除这个鸟类吗？')) {
-            fetch(`${API_BASE_URL}/birds/${birdId}`, {
-                method: 'DELETE'
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('删除鸟类失败');
-                    }
+            const operationDesc = `删除鸟类: ID#${birdId}`;
+
+            if (!checkOperationLimit('delete')) {
+                showNotification('您今天的操作次数已达上限（8次）');
+                return;
+            }
+
+            fetchWithLogging(`${API_BASE_URL}/birds/${birdId}`, 'DELETE', null, operationDesc)
+                .then(() => {
                     fetchBirds();
                     fetchBirdCount();
                     showNotification('鸟类已删除');
@@ -909,6 +926,67 @@
                     showNotification('删除鸟类失败');
                 });
         }
+    }
+
+    // 统一的带日志记录的fetch函数
+    async function fetchWithLogging(url, method, body, operationDesc) {
+        try {
+            const response = await fetch(url, {
+                method,
+                body,
+                headers: {
+                    'X-Operation-Desc': encodeURIComponent(operationDesc)
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 429) {
+                    throw new Error('操作频率超限：单个IP 24小时内最多进行8次操作');
+                }
+                throw new Error('操作失败');
+            }
+
+            // 更新本地操作记录
+            updateLocalOperationLog(operationDesc);
+
+            return await response.json();
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // 检查本地操作限制
+    function checkOperationLimit(operationType) {
+        const operations = JSON.parse(localStorage.getItem('birdOperations') || '[]');
+        const today = new Date().toISOString().split('T')[0];
+        const todayOperations = operations.filter(op => op.date === today);
+
+        // 显示本地剩余操作次数（可选）
+        const remaining = Math.max(0, 8 - todayOperations.length);
+        console.log(`今日剩余操作次数: ${remaining}/8`);
+
+        return todayOperations.length < 8;
+    }
+
+    // 更新本地操作日志
+    function updateLocalOperationLog(operationDesc) {
+        const operations = JSON.parse(localStorage.getItem('birdOperations') || '[]');
+        const today = new Date().toISOString().split('T')[0];
+
+        operations.push({
+            timestamp: new Date().toISOString(),
+            operation: operationDesc,
+            date: today
+        });
+
+        // 保持最近7天的记录
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const recentOperations = operations.filter(op => {
+            return new Date(op.timestamp) > oneWeekAgo;
+        });
+
+        localStorage.setItem('birdOperations', JSON.stringify(recentOperations));
     }
 
     // 处理滚动事件
