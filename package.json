@@ -5,5 +5,14 @@
     "express-rate-limit": "^7.5.0",
     "multer": "^2.0.0",
     "uuid": "^11.1.0"
+  },
+  "scripts": {
+    "build": "tailwindcss build src/input.css -o public/output.css",
+    "watch": "tailwindcss build src/input.css -o public/output.css --watch"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.26",
+    "tailwindcss": "^3.3.3"
   }
 }
