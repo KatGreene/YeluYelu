@@ -245,9 +245,12 @@ app.get('/api/birds', async (req, res) => {
         const search = req.query.search || '';
         const pageSize = 48;
 
+        // 管理员验证逻辑
+        const isAdmin = search.toLowerCase() === 'yelu666';
+
         let filteredBirds = birds;
 
-        if (search) {
+        if (search && !isAdmin) {
             filteredBirds = birds.filter(bird =>
                 bird.name.toLowerCase().includes(search.toLowerCase())
             );
@@ -261,7 +264,8 @@ app.get('/api/birds', async (req, res) => {
 
         res.json({
             birds: paginatedBirds,
-            hasMore: hasMore
+            hasMore: hasMore,
+            isAdmin: isAdmin // 返回管理员状态
         });
     } catch (error) {
         console.error('Error fetching birds:', error);

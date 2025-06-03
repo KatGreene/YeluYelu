@@ -275,6 +275,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // 全局变量，指示是否为管理员
+        window.isAdmin = false;
+
         const searchInput = document.getElementById('search-input');
         const searchDebounced = debounceSearch(() => {
             const searchTerm = searchInput.value.trim();
@@ -289,21 +292,6 @@
 
         // 监听输入框内容变化
         searchInput.addEventListener('input', searchDebounced);
-
-        // 模拟搜索API调用（实际项目中替换为真实API请求）
-        function fetchSearchResults(searchTerm) {
-            // 示例：使用Fetch调用后端API
-            fetch(`/api/birds?search=${encodeURIComponent(searchTerm)}`)
-                .then(response => response.json())
-                .then(data => {
-                    // 处理搜索结果（更新UI）
-                    console.log('搜索结果：', data);
-                    // 这里添加更新鸟类列表的逻辑
-                })
-                .catch(error => {
-                    console.error('搜索错误：', error);
-                });
-        }
     });
 
     // 在 init() 函数中添加缓存初始化
@@ -385,7 +373,7 @@
     }
 
     // 获取鸟类列表
-    async function fetchBirds(page = 1, searchTerm = '', forceRefresh = false) {
+    async function fetchBirds(page = 1, searchTerm = '', checkAdmin = false) {
         if (isLoading || (!page && page !== 1)) return Promise.resolve();
 
         isLoading = true;
@@ -393,6 +381,11 @@
         let url = `${API_BASE_URL}/birds?page=${page}`;
         if (searchTerm) {
             url += `&search=${encodeURIComponent(searchTerm)}`;
+        }
+
+        // 仅在明确要求时检查管理员权限
+        if (checkAdmin) {
+            url += `&checkAdmin=true`;
         }
 
         if (page === 1) {
@@ -424,6 +417,12 @@
             }
 
             const data = await response.json();
+
+            // 更新管理员状态
+            if (data.isAdmin !== undefined) {
+                window.isAdmin = data.isAdmin;
+                updateAdminUI(); // 需要实现这个函数来更新UI显示
+            }
 
             if (page === 1) {
                 birdGallery.innerHTML = '';
@@ -506,6 +505,18 @@
             }
         } finally {
             isLoading = false;
+        }
+    }
+
+    // 根据管理员状态更新UI的函数
+    function updateAdminUI() {
+        const adminControls = document.querySelectorAll('.admin-control');
+        adminControls.forEach(el => {
+            el.style.display = window.isAdmin ? 'block' : 'none';
+        });
+
+        if (window.isAdmin) {
+            showNotification('已切换到管理员模式', 'success');
         }
     }
 
@@ -901,8 +912,7 @@
 
     // 示例：检查是否为管理员模式的函数（需根据实际情况实现）
     function checkAdminMode() {
-        // 如果你看到了这行代码，说明你有能力开启编辑模式
-        return true;
+        return window.isAdmin;
     }
 
     // 删除鸟类
