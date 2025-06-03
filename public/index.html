@@ -6,6 +6,7 @@
     <title>夜鹭页录</title>
     <link rel="icon" href="images/游隼.jpg" type="image/jpg">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -45,6 +46,16 @@
             /* 强制每行4列的网格布局 */
             .gallery-fixed-cols {
                 grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            /* 仅在导出PNG中显示的元素（默认隐藏） */
+            .export-only {
+                display: none !important;
+            }
+
+            /* 仅在网页中显示的元素（默认显示） */
+            .screen-only {
+                display: block !important;
             }
         }
     </style>
@@ -97,7 +108,7 @@
     </div>
 
     <!-- 搜索 -->
-    <div class="bg-white border-2 border-black p-4 p-6 mb-8 md:mb-16">
+    <div class="bg-white border-2 border-black p-4 p-6 mb-8 md:mb-16 no-export">
         <div class="relative w-full">
             <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
             <input type="text" id="search-input" placeholder="搜索鸟类名称..."
@@ -105,17 +116,22 @@
         </div>
     </div>
 
-    <!-- 鸟类画廊 -->
-    <div id="bird-gallery" class="grid gallery-fixed-cols gap-1 md:gap-8">
-        <!-- 鸟类卡片将通过JavaScript动态生成 -->
-        <div class="col-span-full text-center py-12">
-            <div class="inline-block animate-spin h-12 w-12 border-b-2 border-primary"></div>
-            <p class="text-gray-500 mt-4">加载鸟类数据中...</p>
+    <div id="bird-gallery-export">
+        <p class="text-black ml-1 mt-4 text-3xl font-bold export-only">常见鸟类辨识图鉴</p>
+        <p class="text-black ml-1 mt-2 mb-4 text-base export-only">来自：夜鹭页录 https://yeluyelu.mynatapp.cc</p>
+
+        <!-- 鸟类画廊 -->
+        <div id="bird-gallery" class="grid gallery-fixed-cols gap-1 md:gap-8 export-area">
+            <!-- 鸟类卡片将通过JavaScript动态生成 -->
+            <div class="col-span-full text-center py-12">
+                <div class="inline-block animate-spin h-12 w-12 border-b-2 border-primary"></div>
+                <p class="text-gray-500 mt-4">加载鸟类数据中...</p>
+            </div>
         </div>
     </div>
 
     <!-- 加载更多 -->
-    <div class="mt-12 text-center">
+    <div class="mt-12 text-center no-export">
         <button id="load-more" class="btn-primary px-8">
             <i class="fa fa-refresh mr-2"></i>加载更多
         </button>
@@ -123,7 +139,7 @@
 </main>
 
 <!-- 添加/编辑鸟类模态框 -->
-<div id="bird-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+<div id="bird-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden no-export">
     <div class="bg-white shadow-2xl w-full max-w-lg mx-4 transform transition-all duration-300 scale-95 opacity-0"
          id="modal-content">
         <div class="flex justify-between items-center p-6 border-b">
@@ -166,21 +182,23 @@
 </div>
 
 <!-- 页脚 -->
-<footer class="text-black py-2 border-t-2 border-black">
+<footer class="text-black py-2 border-t-2 border-black no-export">
     <div class="container mx-auto px-2">
         <div class="flex flex-col items-center justify-center">
             <div class="mt-1 mb-4 text-center">
-                <button id="about-btn" class="text-black hover:text-gray-500 transition-colors flex items-center mx-auto text-xl font-bold">
+                <button id="export-btn" class="text-black hover:text-gray-500 transition-colors flex items-center mx-auto mt-b text-xl font-bold">
+                    <i class="fa fa-download mr-1"></i> 导出图片
+                </button>
+                <button id="about-btn" class="text-black hover:text-gray-500 transition-colors flex items-center mx-auto text-xl font-bold mt-2.5 mb-1">
                     <i class="fa fa-info-circle mr-1"></i> 关于
                 </button>
-                <a href="https://space.bilibili.com/29602970" class="underline block mt-4 text-black hover:text-gray-500 transition-colors flex">联系开发者</a>
             </div>
         </div>
     </div>
 </footer>
 
 <!-- 关于模态框 -->
-<div id="about-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+<div id="about-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden no-export">
     <div class="bg-white shadow-2xl w-full max-w-lg mx-4 transform transition-all duration-300 scale-95 opacity-0"
          id="about-modal-content">
         <div class="flex justify-between items-center p-6 border-b">
@@ -213,6 +231,18 @@
 <!-- 通知组件 -->
 <div id="notification"
      class="fixed bottom-4 right-4 bg-primary text-white px-4 py-2 border-2 border-black p-4 transform transition-all duration-500 translate-y-20 opacity-0 z-50"></div>
+
+<!-- 加载遮罩 -->
+<div id="loadingOverlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden no-export">
+    <div class="bg-white p-6 rounded-lg shadow-2xl">
+        <div class="flex items-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mr-4"></div>
+            <span class="text-lg font-bold text-primary">正在生成图片...</span>
+        </div>
+    </div>
+</div>
+
+<script src="html-to-png.js"></script>
 
 <script>
     window.isServiceWorkerEnabled = false; // 全局标志，默认禁用
@@ -879,7 +909,7 @@
     // 创建鸟类卡片
     function createBirdCard(bird) {
         const card = document.createElement('div');
-        card.className = 'bird-card p-0.5 card-hover mb-1.5';
+        card.className = 'bird-card p-0.5 card-hover mb-2.5';
         card.setAttribute('data-id', bird.id);
 
         // 判断是否为管理员模式
