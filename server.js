@@ -10,34 +10,26 @@ const cors = require('cors');
 const app = express();
 const PORT = 3000;
 
-// 配置CORS - 允许所有来源（开发环境）
-// // 生产环境应指定具体的域名，例如：
-// const corsOptions = {
-//   origin: 'http://b6a58fd3.natappfree.cc',
-//   credentials: true
-// };
-// app.use(cors(corsOptions));
+// 告诉Express信任代理（重要！）
+app.set('trust proxy', true);
 
-// 开发环境配置 - 允许所有来源
+// 配置CORS - 允许所有来源（开发环境）
 app.use(cors({
-    origin: ['http://b6a58fd3.natappfree.cc/', 'http://localhost:3000'],
+    origin: ['http://b6a58fd3.natappfree.cc', 'http://localhost:3000'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true
 }));
 
-// 1. 配置根目录的静态文件服务（重点！）
+// 静态文件服务
 app.use(express.static(path.join(__dirname, 'public')));
-
-// 2. 配置API图片路径的静态文件服务（保持原有配置）
 app.use('/api/images', express.static(path.join(__dirname, 'public/images')));
 
 // 解析JSON请求体
 app.use(express.json());
 
-// 在所有 API 路由中添加缓存控制头
+// API缓存控制
 app.use('/api', (req, res, next) => {
-    // 设置缓存控制头 - 客户端可以缓存1小时
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     next();
 });
@@ -58,9 +50,8 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
-// 存储操作日志的文件
+// 存储操作日志和IP操作频率的文件
 const operationLogPath = path.join(__dirname, 'operation_log.json');
-// 存储IP操作频率的文件
 const ipOperationsPath = path.join(__dirname, 'ip_operations.json');
 
 // 初始化文件
@@ -118,12 +109,38 @@ async function writeIpOperations(records) {
     }
 }
 
-// 获取客户端IP
+// 获取客户端IP - 针对natapp穿透优化版本
 function getClientIp(req) {
-    return req.ip ||
-        req.headers['x-forwarded-for'] ||
-        req.connection.remoteAddress ||
-        'unknown';
+    // 首先尝试从Express的trust proxy机制获取
+    let clientIp = req.ip;
+
+    // 处理IPv4映射的IPv6地址
+    if (clientIp && clientIp.startsWith('::ffff:')) {
+        clientIp = clientIp.substring(7);
+    }
+
+    // 如果没有获取到，尝试从常见的代理头中获取
+    if (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1') {
+        // 尝试natapp可能使用的代理头
+        clientIp = req.headers['x-real-ip'] ||
+            req.headers['x-forwarded-for'] ||
+            req.connection.remoteAddress ||
+            req.socket.remoteAddress ||
+            req.connection.socket.remoteAddress ||
+            'unknown';
+
+        // 如果x-forwarded-for包含多个IP，取第一个（客户端IP）
+        if (clientIp && typeof clientIp === 'string') {
+            clientIp = clientIp.split(',')[0].trim();
+        }
+
+        // 再次处理IPv4映射的IPv6地址
+        if (clientIp && clientIp.startsWith('::ffff:')) {
+            clientIp = clientIp.substring(7);
+        }
+    }
+
+    return clientIp;
 }
 
 // 操作日志中间件
@@ -164,6 +181,8 @@ async function logOperation(req, res, next) {
 // IP操作频率限制中间件
 async function operationRateLimiter(req, res, next) {
     const clientIp = getClientIp(req);
+    console.log(`Client IP: ${clientIp}`); // 添加日志，帮助调试
+
     const operations = await readIpOperations();
     const now = new Date();
     const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000);
@@ -175,6 +194,7 @@ async function operationRateLimiter(req, res, next) {
 
     // 检查是否超过限制（8次/24小时）
     if (recentOperations.length >= 8) {
+        console.log(`Rate limit exceeded for IP: ${clientIp}`);
         return res.status(429).json({
             error: '操作频率超限',
             message: '单个IP 24小时内最多进行8次操作',
@@ -233,7 +253,7 @@ async function saveData() {
     }
 }
 
-// 3. 添加根路径路由（确保访问/时返回index.html）
+// 根路径路由
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -265,7 +285,7 @@ app.get('/api/birds', async (req, res) => {
         res.json({
             birds: paginatedBirds,
             hasMore: hasMore,
-            isAdmin: isAdmin // 返回管理员状态
+            isAdmin: isAdmin
         });
     } catch (error) {
         console.error('Error fetching birds:', error);
